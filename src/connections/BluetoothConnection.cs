@@ -4,6 +4,7 @@ using LaunchMonitor.Proto;
 using gspro_r10.bluetooth;
 using Microsoft.Extensions.Configuration;
 using System.Text;
+using System.Globalization;
 
 namespace gspro_r10
 {
@@ -25,7 +26,6 @@ namespace gspro_r10
       Configuration = configuration;
       ReconnectInterval = int.Parse(configuration["reconnectInterval"] ?? "5");
       Task.Run(ConnectToDevice);
-
     }
 
     private void ConnectToDevice()
@@ -95,8 +95,8 @@ namespace gspro_r10
       {
         LogMetrics(e.Metrics);
         ConnectionManager.SendShot(
-          BallDataFromLaunchMonitorMetrics(e.Metrics?.BallMetrics),
-          ClubDataFromLaunchMonitorMetrics(e.Metrics?.ClubMetrics)
+          BallDataFromLaunchMonitorMetrics(Configuration, e.Metrics?.BallMetrics),
+          ClubDataFromLaunchMonitorMetrics(Configuration, e.Metrics?.ClubMetrics)
         );
       };
 
@@ -106,11 +106,11 @@ namespace gspro_r10
         return null;
       }
 
-      float temperature = float.Parse(Configuration["temperature"] ?? "60");
-      float humidity = float.Parse(Configuration["humidity"] ?? "1");
-      float altitude = float.Parse(Configuration["altitude"] ?? "0");
-      float airDensity = float.Parse(Configuration["airDensity"] ?? "1");
-      float teeDistanceInFeet = float.Parse(Configuration["teeDistanceInFeet"] ?? "7");
+      float temperature = float.Parse(Configuration["temperature"] ?? "60", CultureInfo.InvariantCulture);
+      float humidity = float.Parse(Configuration["humidity"] ?? "1", CultureInfo.InvariantCulture);
+      float altitude = float.Parse(Configuration["altitude"] ?? "0", CultureInfo.InvariantCulture);
+      float airDensity = float.Parse(Configuration["airDensity"] ?? "1", CultureInfo.InvariantCulture);
+      float teeDistanceInFeet = float.Parse(Configuration["teeDistanceInFeet"] ?? "7", CultureInfo.InvariantCulture);
       float teeRange = teeDistanceInFeet * FEET_TO_METERS;
 
       lm.ShotConfig(temperature, humidity, altitude, airDensity, teeRange);
@@ -134,14 +134,14 @@ namespace gspro_r10
       return null;
     }
 
-    public static BallData? BallDataFromLaunchMonitorMetrics(BallMetrics? ballMetrics)
+    public static BallData? BallDataFromLaunchMonitorMetrics(IConfigurationSection configuration, BallMetrics? ballMetrics)
     {
       if (ballMetrics == null) return null;
       return new BallData()
       {
         HLA = ballMetrics.LaunchDirection,
         VLA = ballMetrics.LaunchAngle,
-        Speed = ballMetrics.BallSpeed * METERS_PER_S_TO_MILES_PER_HOUR,
+        Speed = ShotBoost.Boost(configuration, ballMetrics.BallSpeed * METERS_PER_S_TO_MILES_PER_HOUR),
         SpinAxis = ballMetrics.SpinAxis * -1,
         TotalSpin = ballMetrics.TotalSpin,
         SideSpin = ballMetrics.TotalSpin * Math.Sin(-1 * ballMetrics.SpinAxis * Math.PI / 180),
@@ -149,13 +149,13 @@ namespace gspro_r10
       };
     }
 
-    public static ClubData? ClubDataFromLaunchMonitorMetrics(ClubMetrics? clubMetrics)
+    public static ClubData? ClubDataFromLaunchMonitorMetrics(IConfigurationSection configuration, ClubMetrics? clubMetrics)
     {
       if (clubMetrics == null) return null;
       return new ClubData()
       {
-        Speed = clubMetrics.ClubHeadSpeed * METERS_PER_S_TO_MILES_PER_HOUR,
-        SpeedAtImpact = clubMetrics.ClubHeadSpeed * METERS_PER_S_TO_MILES_PER_HOUR,
+        Speed = ShotBoost.Boost(configuration, clubMetrics.ClubHeadSpeed * METERS_PER_S_TO_MILES_PER_HOUR),
+        SpeedAtImpact = ShotBoost.Boost(configuration, clubMetrics.ClubHeadSpeed * METERS_PER_S_TO_MILES_PER_HOUR),
         AngleOfAttack = clubMetrics.AttackAngle,
         FaceToTarget = clubMetrics.ClubAngleFace,
         Path = clubMetrics.ClubAnglePath
